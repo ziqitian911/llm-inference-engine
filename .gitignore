@@ -24,6 +24,9 @@ model/
 report1.nsys-rep
 report1.sqlite
 
+#cache
+.cache/
+
 
 # scratch
 scratch/

@@ -104,3 +104,33 @@ Tensor embedding(const std::vector<int> &ids, const Tensor &wte, const Tensor &w
 
     return result;
 }
+
+Tensor layernorm(const Tensor &input, const Tensor &weight, const Tensor &bias, const float epsilon)
+{
+    const int T = input.dim(0);
+    const int d_model = weight.dim(0);
+
+    Tensor result({T, d_model});
+
+    for (int i = 0; i < T; i++)
+    {
+        float mean = std::accumulate(input.begin() + i * d_model, input.begin() + i * d_model + d_model, 0.0f) / d_model;
+
+        // c
+        float var = 0.0f;
+        for (int j = 0; j < d_model; j++)
+        {
+            var += (input[i * d_model + j] - mean) * (input[i * d_model + j] - mean);
+        }
+        var /= d_model;
+        float std_dev = std::sqrt(var + epsilon);
+
+        for (int j = 0; j < d_model; j++)
+        {
+            result[i * d_model + j] = (input[i * d_model + j] - mean) / std_dev;
+            result[i * d_model + j] = result[i * d_model + j] * weight[j] + bias[j];
+        }
+    }
+
+    return result;
+}
