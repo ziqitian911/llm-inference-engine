@@ -77,3 +77,30 @@ Tensor softmax(const Tensor &input)
 
     return out;
 }
+
+/**
+ * @brief
+ *
+ * @param ids
+ * @param wte word token embedding
+ * @param wpe word position embedding
+ */
+Tensor embedding(const std::vector<int> &ids, const Tensor &wte, const Tensor &wpe)
+{
+
+    const int T = static_cast<int>(ids.size()); // amount of token
+    const int d_model = wte.dim(1);             // dimension of the model
+
+    Tensor result({T, d_model});
+
+    for (int t = 0; t < T; t++)
+    {
+        int token_id = ids[t];
+        for (int j = 0; j < d_model; j++)
+        {
+            result[t * d_model + j] = wte[token_id * d_model + j] + wpe[t * d_model + j];
+        }
+    }
+
+    return result;
+}

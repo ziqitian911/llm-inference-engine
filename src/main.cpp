@@ -43,5 +43,25 @@ int main(int argc, char const *argv[])
     }
     std::cout << std::endl;
 
+    // embedding check: "Hello, world!" -> ids [15496, 11, 995, 0]
+    // expected (first 3 of each row, from PyTorch wte[id] + wpe[pos]):
+    //   -0.0875 -0.3301  0.0152
+    //    0.0355 -0.0567 -0.0626
+    //   -0.1446  0.0671  0.0601
+    //   -0.1104 -0.1131  0.1386
+    const Tensor &wpe = m.at("transformer.wpe.weight");
+    Tensor x = embedding({15496, 11, 995, 0}, wte, wpe);
+    const int d_model = x.dim(1);
+
+    std::cout << "embedding shape: [" << x.dim(0) << ", " << d_model << "]" << std::endl;
+    for (int t = 0; t < x.dim(0); t++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            std::cout << x[t * d_model + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
     return 0;
 }
