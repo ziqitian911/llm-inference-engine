@@ -10,6 +10,7 @@ private:
     std::vector<int> strides;
 
 public:
+    Tensor();
     Tensor(const std::vector<int> &shape);
     Tensor(const Tensor &other);
     Tensor(Tensor &&other) noexcept;

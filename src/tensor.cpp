@@ -4,6 +4,15 @@
 #include <iostream>
 
 /**
+ * @brief default constructor
+ */
+Tensor::Tensor()
+{
+    this->count = 0;
+    this->data = nullptr;
+}
+
+/**
  * @brief Build a tensor of the given shape and allocate its buffer
  * @param shape dimensions, e.g. {28, 28} for a 28x28 image
  */
@@ -65,6 +74,7 @@ Tensor::Tensor(Tensor &&other) noexcept
     this->strides = std::move(other.strides);
     this->count = other.count; // move is useless for int
     other.data = nullptr;
+    other.count = 0;
 }
 
 /**
@@ -142,6 +152,7 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept
     this->strides = std::move(other.strides);
     this->data = other.data;
     other.data = nullptr;
+    other.count = 0;
     return *this;
 }
 

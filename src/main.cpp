@@ -26,15 +26,22 @@ int main(int argc, char const *argv[])
     int pred = it - probs.begin();
 
     std::cout << pred << std::endl;
+    auto m = load_model("model/gpt2.bin");
 
-    // ThreadPool pool(4);
+    std::cout << m.size() << std::endl;
+    std::cout << m["transformer.wte.weight"].dim(0) << std::endl;
+    std::cout << m["transformer.wte.weight"].dim(1) << std::endl;
+    std::cout << m["transformer.h.0.attn.c_attn.weight"].dim(0) << std::endl;
+    std::cout << m["transformer.h.0.attn.c_attn.weight"].dim(1) << std::endl;
+    std::cout << m["transformer.ln_f.bias"].dim(0) << std::endl;
 
-    // for (int i = 0; i < 8; i++)
-    // {
-    //     pool.enqueue(
-    //         [i]()
-    //         { std::cout << "task " << i << " running\n"; });
-    // }
+    // value check: first 5 floats of wte, compare with PyTorch's wte.weight[0, :5]
+    const Tensor &wte = m.at("transformer.wte.weight");
+    for (int i = 0; i < 5; i++)
+    {
+        std::cout << wte[i] << " ";
+    }
+    std::cout << std::endl;
 
     return 0;
 }

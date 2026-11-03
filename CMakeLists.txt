@@ -26,8 +26,15 @@ add_executable(bench
     src/gemm.cpp
     src/threadpool.cpp)
 
+add_executable(bench_lmhead
+    src/bench_lmhead.cpp
+    src/tensor.cpp
+    src/gemm.cpp
+    src/threadpool.cpp)
+
 target_include_directories(main PRIVATE include)
 target_include_directories(bench PRIVATE include)
+target_include_directories(bench_lmhead PRIVATE include)
 
 # Optional CUDA backend: build GPU kernels + cuBLAS only if a CUDA compiler exists.
 option(ENABLE_CUDA "Build the CUDA backend if a CUDA compiler is available" ON)

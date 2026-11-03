@@ -5,9 +5,8 @@ CLAUDE.md
 NOTES.md
 
 # build
-build/
+build*/
 output/
-build-cpu/
 
 # downloaded MNIST dataset (regenerate via python/export.py)
 data/
