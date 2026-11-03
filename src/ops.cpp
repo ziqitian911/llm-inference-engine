@@ -57,9 +57,11 @@ Tensor linear(const Tensor &input, const Tensor &weights, const Tensor &bias)
     // matmul
     Tensor out = matmul(input, weights);
 
+    const int out_features = out.dim(1);
+
     for (int i = 0; i < out.size(); i++)
     {
-        out[i] += bias[i];
+        out[i] += bias[i % out_features];
     }
 
     return out;
