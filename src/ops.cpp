@@ -108,18 +108,18 @@ Tensor embedding(const std::vector<int> &ids, const Tensor &wte, const Tensor &w
     const int T = static_cast<int>(ids.size()); // amount of token
     const int d_model = wte.dim(1);             // dimension of the model
 
-    Tensor result({T, d_model});
+    Tensor out({T, d_model});
 
     for (int t = 0; t < T; t++)
     {
         int token_id = ids[t];
         for (int j = 0; j < d_model; j++)
         {
-            result[t * d_model + j] = wte[token_id * d_model + j] + wpe[t * d_model + j];
+            out[t * d_model + j] = wte[token_id * d_model + j] + wpe[t * d_model + j];
         }
     }
 
-    return result;
+    return out;
 }
 
 Tensor layernorm(const Tensor &input, const Tensor &weight, const Tensor &bias, const float epsilon)
@@ -127,7 +127,7 @@ Tensor layernorm(const Tensor &input, const Tensor &weight, const Tensor &bias, 
     const int T = input.dim(0);
     const int d_model = weight.dim(0);
 
-    Tensor result({T, d_model});
+    Tensor out({T, d_model});
 
     for (int i = 0; i < T; i++)
     {
@@ -144,10 +144,19 @@ Tensor layernorm(const Tensor &input, const Tensor &weight, const Tensor &bias, 
 
         for (int j = 0; j < d_model; j++)
         {
-            result[i * d_model + j] = (input[i * d_model + j] - mean) / std_dev;
-            result[i * d_model + j] = result[i * d_model + j] * weight[j] + bias[j];
+            out[i * d_model + j] = (input[i * d_model + j] - mean) / std_dev;
+            out[i * d_model + j] = out[i * d_model + j] * weight[j] + bias[j];
         }
     }
 
-    return result;
+    return out;
+}
+
+Tensor mlp(const Tensor &input, const Tensor &fc_weight, const Tensor &fc_bias, const Tensor &proj_weight, const Tensor &proj_bias)
+{
+    Tensor out = input;
+    out = linear(out, fc_weight, fc_bias);
+    out = gelu(out);
+    out = linear(out, proj_weight, proj_bias);
+    return out;
 }

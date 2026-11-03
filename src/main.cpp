@@ -82,5 +82,23 @@ int main(int argc, char const *argv[])
     }
     std::cout << std::endl;
 
+    // mlp check: y (ln_1 output) -> block 0's mlp
+    Tensor z = mlp(
+        y,
+        m.at("transformer.h.0.mlp.c_fc.weight"),
+        m.at("transformer.h.0.mlp.c_fc.bias"),
+        m.at("transformer.h.0.mlp.c_proj.weight"),
+        m.at("transformer.h.0.mlp.c_proj.bias"));
+
+    std::cout << "mlp shape: [" << z.dim(0) << ", " << z.dim(1) << "]" << std::endl;
+    for (int t = 0; t < z.dim(0); t++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            std::cout << z[t * d_model + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
     return 0;
 }
