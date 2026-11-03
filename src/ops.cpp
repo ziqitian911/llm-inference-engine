@@ -4,6 +4,7 @@
 #include <stdexcept>
 #include <cmath>
 #include <numeric>
+#include <numbers>
 #include "gemm.h"
 
 /**
@@ -21,6 +22,20 @@ Tensor relu(const Tensor &input)
         out[i] = std::max(.0f, out[i]);
     }
 
+    return out;
+}
+
+Tensor gelu(const Tensor &input)
+{
+    Tensor out = input;
+    const int n = out.size();
+    const float k = std::sqrt(2.0f / std::numbers::pi_v<float>);
+
+    for (int i = 0; i < n; i++)
+    {
+        float x = out[i];
+        out[i] = 0.5f * x * (1.0f + std::tanh(k * (x + 0.044715f * x * x * x)));
+    }
     return out;
 }
 

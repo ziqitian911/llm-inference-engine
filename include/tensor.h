@@ -4,7 +4,7 @@
 class Tensor
 {
 private:
-    int count;
+    int count; // element count
     float *data;
     std::vector<int> shape;
     std::vector<int> strides;

@@ -73,5 +73,14 @@ int main(int argc, char const *argv[])
         std::cout << std::endl;
     }
 
+    // gelu check: expected
+    // -0.0036 -0.0454 -0.1588 -0.1543 0.0000 0.3457 0.8412 1.9546 2.9964
+    Tensor g = gelu(Tensor({9}, {-3.f, -2.f, -1.f, -0.5f, 0.f, 0.5f, 1.f, 2.f, 3.f}));
+    for (int i = 0; i < g.size(); i++)
+    {
+        std::cout << g[i] << " ";
+    }
+    std::cout << std::endl;
+
     return 0;
 }
