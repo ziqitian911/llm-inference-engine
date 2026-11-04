@@ -78,18 +78,27 @@ Tensor softmax(const Tensor &input)
 {
     Tensor out = input;
 
-    const float max = *std::max_element(out.begin(), out.end());
+    // treat any tensor as n_rows rows of row_len numbers (last dim is contiguous)
+    const int row_len = out.dim(out.ndim() - 1);
+    const int n_rows = out.size() / row_len;
 
-    for (int i = 0; i < out.size(); i++)
+    for (int r = 0; r < n_rows; r++)
     {
-        out[i] = std::exp(out[i] - max);
-    }
+        float *row = out.begin() + r * row_len;
 
-    float sum = std::accumulate(out.begin(), out.end(), 0.0f);
+        const float max = *std::max_element(row, row + row_len);
 
-    for (int i = 0; i < out.size(); i++)
-    {
-        out[i] /= sum;
+        for (int c = 0; c < row_len; c++)
+        {
+            row[c] = std::exp(row[c] - max);
+        }
+
+        const float sum = std::accumulate(row, row + row_len, 0.0f);
+
+        for (int c = 0; c < row_len; c++)
+        {
+            row[c] /= sum;
+        }
     }
 
     return out;

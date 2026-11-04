@@ -196,6 +196,11 @@ int Tensor::dim(int i) const
     return shape[i];
 }
 
+int Tensor::ndim() const
+{
+    return static_cast<int>(this->shape.size());
+}
+
 /**
  * @brief Access element by multi-dim index;
  *

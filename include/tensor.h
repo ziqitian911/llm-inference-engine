@@ -24,6 +24,7 @@ public:
 
     int size() const;
     int dim(int i) const;
+    int ndim() const;
 
     float &at(const std::vector<int> &idx);
     float at(const std::vector<int> &idx) const;
