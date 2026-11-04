@@ -100,5 +100,34 @@ int main(int argc, char const *argv[])
         std::cout << std::endl;
     }
 
+    // attention check: y (ln_1 output) -> block 0's attn
+    // expected (first 3 per row), depends on what attention() returns:
+    //   qkv / Q: 0.4701 -0.0775 0.5531 | 0.2831 -0.2919 0.6766 | 0.3628 0.7346 0.0941 | 0.2790 -0.3308 0.7370
+    //   K:      -1.2526  2.3200 0.1722 | -1.6482 3.0222 1.2789 | -2.7801 3.8824 1.4420 | -2.0379 2.7107 1.9940
+    //   V:       0.1637  0.2042 -0.0436 | -0.0800 0.0181 -0.0534 | 0.0671 -0.0090 0.1121 | -0.1263 -0.0219 - 0.1731
+    Tensor a = attention(
+        y,
+        m.at("transformer.h.0.attn.c_attn.weight"),
+        m.at("transformer.h.0.attn.c_attn.bias"),
+        m.at("transformer.h.0.attn.c_proj.weight"),
+        m.at("transformer.h.0.attn.c_proj.bias"),
+        12);
+
+    std::cout << "attention shape: [" << a.dim(0) << ", " << a.dim(1) << "]" << std::endl;
+    for (int t = 0; t < a.dim(0); t++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            std::cout << a[t * a.dim(1) + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    printf("Transpose test\n");
+
+    Tensor({2, 3}, {1, 2, 3, 4, 5, 6}).print();
+
+    transpose(Tensor({2, 3}, {1, 2, 3, 4, 5, 6})).print();
+
     return 0;
 }
