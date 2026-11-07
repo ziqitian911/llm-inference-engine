@@ -173,5 +173,29 @@ int main(int argc, char const *argv[])
         std::cout << std::endl;
     }
 
+    // test forward
+    Tensor f = forward({15496, 11, 995, 0}, m);
+    std::cout << "Forward result: " << std::endl;
+    for (int t = 0; t < f.dim(0); t++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            std::cout << f[t * b0.dim(1) + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // lm_head check: last row of hidden states -> logits
+    Tensor logits = lm_head(f, m.at("transformer.wte.weight"));
+    std::cout << "logits shape: [" << logits.dim(0) << ", " << logits.dim(1) << "]" << std::endl;
+    for (int j = 0; j < 3; j++)
+    {
+        std::cout << logits[j] << " ";
+    }
+    std::cout << std::endl;
+
+    const float *best = std::max_element(logits.begin(), logits.end());
+    std::cout << "next token id: " << best - logits.begin() << std::endl;
+
     return 0;
 }
