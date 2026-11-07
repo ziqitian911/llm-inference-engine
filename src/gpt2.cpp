@@ -8,6 +8,7 @@
 
 #include <unordered_map>
 #include <string>
+#include <algorithm>
 
 constexpr int n_layer = 12;
 
@@ -90,6 +91,21 @@ Tensor lm_head(const Tensor &input, const Tensor &wte)
             sum += last[j] * wte[i * d_model + j];
         }
         out[i] = sum;
+    }
+
+    return out;
+}
+
+std::vector<int> generate(const std::vector<int> &ids, const std::unordered_map<std::string, Tensor> &weight_map, int n_tokens)
+{
+    const Tensor &wte = weight_map.at("transformer.wte.weight");
+    std::vector<int> out = ids;
+
+    for (int i = 0; i < n_tokens; i++)
+    {
+        Tensor logits = lm_head(forward(out, weight_map), wte);
+
+        out.push_back(std::max_element(logits.begin(), logits.end()) - logits.begin());
     }
 
     return out;

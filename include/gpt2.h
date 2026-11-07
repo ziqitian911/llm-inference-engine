@@ -16,3 +16,8 @@ Tensor forward(
     const std::unordered_map<std::string, Tensor> &weight_map);
 
 Tensor lm_head(const Tensor &input, const Tensor &wte);
+
+std::vector<int> generate(
+    const std::vector<int> &ids,
+    const std::unordered_map<std::string, Tensor> &weight_map,
+    int n_tokens = 20);
