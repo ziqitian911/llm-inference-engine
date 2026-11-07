@@ -17,6 +17,7 @@ public:
     Tensor(const std::vector<int> &shape, const std::vector<float> &values);
     ~Tensor();
 
+    Tensor &operator+=(const Tensor &other);
     Tensor &operator=(const Tensor &other);
     Tensor &operator=(Tensor &&other) noexcept;
     float &operator[](int i);
@@ -35,3 +36,5 @@ public:
 
     void print() const;
 };
+
+Tensor operator+(const Tensor &a, const Tensor &b);

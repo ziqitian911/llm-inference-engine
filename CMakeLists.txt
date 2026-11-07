@@ -18,7 +18,8 @@ add_executable(main
     src/gemm.cpp 
     src/ops.cpp 
     src/loader.cpp
-    src/threadpool.cpp)
+    src/threadpool.cpp
+    src/gpt2.cpp)
     
 add_executable(bench 
     src/bench.cpp 

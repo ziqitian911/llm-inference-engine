@@ -1,9 +1,11 @@
 #include <iostream>
+#include <stdexcept>
 #include "tensor.h"
 #include "gemm.h"
 #include "ops.h"
 #include "loader.h"
 #include "threadpool.h"
+#include "gpt2.h"
 
 int main(int argc, char const *argv[])
 {
@@ -128,6 +130,48 @@ int main(int argc, char const *argv[])
     Tensor({2, 3}, {1, 2, 3, 4, 5, 6}).print();
 
     transpose(Tensor({2, 3}, {1, 2, 3, 4, 5, 6})).print();
+
+    // operator+= check: p changes, q does not
+    std::cout << "operator+= test" << std::endl;
+    Tensor p({2, 3}, {1, 2, 3, 4, 5, 6});
+    Tensor q({2, 3}, {10, 20, 30, 40, 50, 60});
+    p += q;
+    p.print(); // expected: 11 22 33 / 44 55 66
+    q.print(); // expected: 10 20 30 / 40 50 60
+
+    // operator+ check: r is new, p and q do not change
+    std::cout << "operator+ test" << std::endl;
+    Tensor r = p + q;
+    r.print(); // expected: 21 42 63 / 84 105 126
+    p.print(); // expected: 11 22 33 / 44 55 66
+    q.print(); // expected: 10 20 30 / 40 50 60
+
+    // shape mismatch check: must throw instead of reading out of bounds
+    std::cout << "shape mismatch test" << std::endl;
+    try
+    {
+        Tensor bad({3, 2}, {1, 2, 3, 4, 5, 6});
+        p += bad;
+        std::cout << "FAILED: no exception" << std::endl;
+    }
+    catch (const std::invalid_argument &e)
+    {
+        std::cout << "caught: " << e.what() << std::endl;
+    }
+
+    // block check: embedding output -> block 0
+    Tensor b0 = x;
+    block(b0, m, 0);
+
+    std::cout << "block 0 shape: [" << b0.dim(0) << ", " << b0.dim(1) << "]" << std::endl;
+    for (int t = 0; t < b0.dim(0); t++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            std::cout << b0[t * b0.dim(1) + j] << " ";
+        }
+        std::cout << std::endl;
+    }
 
     return 0;
 }

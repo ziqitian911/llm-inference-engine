@@ -2,6 +2,7 @@
 #include <utility>
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
 
 /**
  * @brief default constructor
@@ -93,6 +94,31 @@ Tensor::Tensor(const std::vector<int> &shape, const std::vector<float> &values) 
 Tensor::~Tensor()
 {
     delete[] this->data;
+}
+
+/**
+ * @brief Add another tensor to this one, element by element.
+ *
+ * @param other tensor to add, must have the same shape
+ * @return reference to this tensor
+ * @throws std::invalid_argument if the shapes differ
+ */
+Tensor &Tensor::operator+=(const Tensor &other)
+{
+
+    // check the shape
+    if (this->shape != other.shape)
+    {
+        throw std::invalid_argument("operator+=: shapes must match");
+    }
+
+    // add elements one by one
+    for (int i = 0; i < this->size(); i++)
+    {
+        this->data[i] += other.data[i];
+    }
+
+    return *this;
 }
 
 /**
@@ -277,4 +303,19 @@ void Tensor::print() const
         }
         std::cout << "\n";
     }
+}
+
+/**
+ * @brief Add two tensors element by element into a new tensor.
+ *
+ * @param a left operand, not modified
+ * @param b right operand, not modified, must have the same shape as a
+ * @return the sum as a new tensor
+ * @throws std::invalid_argument if the shapes differ
+ */
+Tensor operator+(const Tensor &a, const Tensor &b)
+{
+    Tensor out = a;
+    out += b;
+    return out;
 }
