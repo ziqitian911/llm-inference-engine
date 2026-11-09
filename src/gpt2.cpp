@@ -5,10 +5,12 @@
 
 #include "gpt2.h"
 #include "ops.h"
+#include "sampling.h"
 
 #include <unordered_map>
 #include <string>
 #include <algorithm>
+#include <random>
 
 constexpr int n_layer = 12;
 
@@ -96,16 +98,43 @@ Tensor lm_head(const Tensor &input, const Tensor &wte)
     return out;
 }
 
-std::vector<int> generate(const std::vector<int> &ids, const std::unordered_map<std::string, Tensor> &weight_map, int n_tokens)
+/**
+ * @brief
+ * @param ids
+ * @param weight_map
+ * @param n_tokens
+ * @return
+ */
+std::vector<int> generate(
+    const std::vector<int> &ids,
+    const std::unordered_map<std::string, Tensor> &weight_map,
+    int n_tokens,
+    float temperature,
+    int top_k,
+    float top_p)
 {
     const Tensor &wte = weight_map.at("transformer.wte.weight");
     std::vector<int> out = ids;
+    std::mt19937 rng(42); // fixed seed: same output every run
 
     for (int i = 0; i < n_tokens; i++)
     {
         Tensor logits = lm_head(forward(out, weight_map), wte);
 
-        out.push_back(std::max_element(logits.begin(), logits.end()) - logits.begin());
+        int next;
+        if (temperature == 0.0f)
+        {
+            // greedy: take the highest score
+            next = std::max_element(logits.begin(), logits.end()) - logits.begin();
+        }
+        else
+        {
+            // temperature -> top-k -> softmax -> top-p -> draw one
+            Tensor probs = softmax(apply_top_k(apply_temperature(logits, temperature), top_k));
+            next = sample(apply_top_p(probs, top_p), rng);
+        }
+
+        out.push_back(next);
     }
 
     return out;

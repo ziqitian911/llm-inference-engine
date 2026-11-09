@@ -19,7 +19,8 @@ add_executable(main
     src/ops.cpp 
     src/loader.cpp
     src/threadpool.cpp
-    src/gpt2.cpp)
+    src/gpt2.cpp
+    src/sampling.cpp)
     
 add_executable(bench 
     src/bench.cpp 
