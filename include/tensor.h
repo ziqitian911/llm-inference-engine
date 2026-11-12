@@ -20,8 +20,26 @@ public:
     Tensor &operator+=(const Tensor &other);
     Tensor &operator=(const Tensor &other);
     Tensor &operator=(Tensor &&other) noexcept;
-    float &operator[](int i);
-    float operator[](int i) const;
+
+    /**
+     * @brief Access the i-th element by flat index (row-major).
+     * @param i flat index, 0 .. size()-1.
+     * @return reference to the element, so it can be read or written.
+     */
+    float &operator[](int i)
+    {
+        return this->data[i];
+    }
+
+    /**
+     * @brief Read the i-th element by flat index (row-major).
+     * @param i flat index, 0 .. size()-1.
+     * @return a copy of the element (read only).
+     */
+    float operator[](int i) const
+    {
+        return this->data[i];
+    }
 
     int size() const;
     int dim(int i) const;
