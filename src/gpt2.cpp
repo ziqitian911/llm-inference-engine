@@ -11,6 +11,7 @@
 #include <string>
 #include <algorithm>
 #include <random>
+#include <stdexcept>
 
 constexpr int n_layer = 12;
 
@@ -20,9 +21,14 @@ constexpr int n_layer = 12;
  * @param input residual stream of shape [T, d_model], modified in place
  * @param weight_map all model weights, keyed by tensor name
  * @param layer index of the block, from 0 to 11 for GPT-2 small
+ * @param cache KV cache; this block reads and writes cache.K[layer] and cache.V[layer]
  * @throws std::out_of_range if a weight is missing from weight_map
  */
-void block(Tensor &input, const std::unordered_map<std::string, Tensor> &weight_map, const int layer)
+void block(
+    Tensor &input,
+    const std::unordered_map<std::string, Tensor> &weight_map,
+    const int layer,
+    KVCache &cache)
 {
     const std::string prefix = "transformer.h." + std::to_string(layer) + ".";
 
@@ -36,7 +42,10 @@ void block(Tensor &input, const std::unordered_map<std::string, Tensor> &weight_
         weight_map.at(prefix + "attn.c_attn.weight"),
         weight_map.at(prefix + "attn.c_attn.bias"),
         weight_map.at(prefix + "attn.c_proj.weight"),
-        weight_map.at(prefix + "attn.c_proj.bias"));
+        weight_map.at(prefix + "attn.c_proj.bias"),
+        cache.K[layer],
+        cache.V[layer],
+        cache.len);
 
     // x += mlp(ln_2(x))
     input += mlp(
@@ -50,16 +59,34 @@ void block(Tensor &input, const std::unordered_map<std::string, Tensor> &weight_
         weight_map.at(prefix + "mlp.c_proj.bias"));
 }
 
-Tensor forward(const std::vector<int> &ids, const std::unordered_map<std::string, Tensor> &weight_map)
+/**
+ * @brief Run the new tokens through all blocks and the final layernorm.
+ *
+ * @param ids new token ids: the whole prompt for prefill, one token for decode
+ * @param weight_map all model weights, keyed by tensor name
+ * @param cache KV cache; cache.len is increased by ids.size() after all blocks
+ * @return hidden states of shape [ids.size(), d_model]
+ * @throws std::out_of_range if a weight is missing from weight_map
+ */
+Tensor forward(
+    const std::vector<int> &ids,
+    const std::unordered_map<std::string, Tensor> &weight_map,
+    KVCache &cache)
 {
 
-    Tensor out = embedding(ids, weight_map.at("transformer.wte.weight"), weight_map.at("transformer.wpe.weight"));
+    Tensor out = embedding(
+        ids,
+        weight_map.at("transformer.wte.weight"),
+        weight_map.at("transformer.wpe.weight"),
+        cache.len);
 
     // 12 blocks of GPT-2 small
     for (int i = 0; i < n_layer; i++)
     {
-        block(out, weight_map, i);
+        block(out, weight_map, i, cache);
     }
+
+    cache.len += out.dim(0);
 
     out = layernorm(out, weight_map.at("transformer.ln_f.weight"), weight_map.at("transformer.ln_f.bias"));
 
@@ -99,11 +126,21 @@ Tensor lm_head(const Tensor &input, const Tensor &wte)
 }
 
 /**
- * @brief
- * @param ids
- * @param weight_map
- * @param n_tokens
- * @return
+ * @brief Generate new tokens one at a time, appending each to the sequence.
+ *
+ * Step 0 (prefill) runs the whole prompt and fills the KV cache.
+ * Every layer step (decode) runs only the token generated in the previous
+ * step; earlier tokens are seen through their cached K and V.
+ *
+ * @param ids prompt token ids
+ * @param weight_map all model weights, keyed by tensor name
+ * @param n_tokens number of new tokens to generate
+ * @param temperature 0 means greedy (argmax); > 0 divides logits before sampling (higher = more random)
+ * @param top_k keep only the k highest-scoring tokens before sampling
+ * @param top_p keep the smallest set of tokens whose probabilities sum to >= p
+ * @return prompt ids followed by the n_tokens generated ids
+ * @throws std::out_of_range if a weight is missing from weight_map
+ * @throws std::invalid_argument if the prompt plus n_tokens exceeds the context length
  */
 std::vector<int> generate(
     const std::vector<int> &ids,
@@ -113,13 +150,33 @@ std::vector<int> generate(
     int top_k,
     float top_p)
 {
+
+    const int context_length = weight_map.at("transformer.wpe.weight").dim(0);
+
+    if (ids.size() + n_tokens > context_length)
+    {
+        throw std::invalid_argument("generate: prompt length + n_tokens exceeds the context length (1024)");
+    }
+
     const Tensor &wte = weight_map.at("transformer.wte.weight");
     std::vector<int> out = ids;
     std::mt19937 rng(42); // fixed seed: same output every run
+    KVCache cache;
 
     for (int i = 0; i < n_tokens; i++)
     {
-        Tensor logits = lm_head(forward(out, weight_map), wte);
+        std::vector<int> input;
+
+        if (i == 0)
+        {
+            input = out; // prefill: the whole prompt
+        }
+        else
+        {
+            input = {out.back()}; // decode: only the token generated last step
+        }
+
+        Tensor logits = lm_head(forward(input, weight_map, cache), wte);
 
         int next;
         if (temperature == 0.0f)

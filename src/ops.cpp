@@ -107,13 +107,22 @@ Tensor softmax(const Tensor &input)
 }
 
 /**
- * @brief
+ * @brief Look up token and position embeddings and add them.
  *
- * @param ids
- * @param wte word token embedding
- * @param wpe word position embedding
+ * Row t of the output = wte[ids[t]] (what the token is)
+ *                     + wpe[start_pos + t] (where it is in the sequence).
+ *
+ * @param ids token ids to embed, T of them
+ * @param wte token embedding table, shape [vocab_size, d_model]
+ * @param wpe position embedding table, shape [context_length, d_model]
+ * @param start_pos position of ids[0] in the whole sequence (0 for prefill, cache.len for decode)
+ * @return embeddings of shape [T, d_model]
  */
-Tensor embedding(const std::vector<int> &ids, const Tensor &wte, const Tensor &wpe)
+Tensor embedding(
+    const std::vector<int> &ids,
+    const Tensor &wte,
+    const Tensor &wpe,
+    int start_pos)
 {
 
     const int T = static_cast<int>(ids.size()); // amount of token
@@ -126,7 +135,8 @@ Tensor embedding(const std::vector<int> &ids, const Tensor &wte, const Tensor &w
         int token_id = ids[t];
         for (int j = 0; j < d_model; j++)
         {
-            out[t * d_model + j] = wte[token_id * d_model + j] + wpe[t * d_model + j];
+            // wte row = which token, wpe row = which position in the whole sequence
+            out[t * d_model + j] = wte[token_id * d_model + j] + wpe[(t + start_pos) * d_model + j];
         }
     }
 
@@ -195,7 +205,33 @@ Tensor mlp(const Tensor &input, const Tensor &fc_weight, const Tensor &fc_bias, 
     return out;
 }
 
-Tensor attention(const Tensor &input, const Tensor &attn_weight, const Tensor &attn_bias, const Tensor &proj_weight, const Tensor &proj_bias, const int n_head)
+/**
+ * @brief Multi-head causal self-attention with a KV cache.
+ *
+ * Only the T new tokens are passed in. Their K and V are appended to the cache,
+ * and their Q attends to all len + T cached tokens.
+ *
+ * @param input new tokens after ln_1, shape [T, d_model]
+ * @param attn_weight c_attn weight, shape [d_model, 3 * d_model] (Q | K | V)
+ * @param attn_bias c_attn bias, shape [3 * d_model]
+ * @param proj_weight c_proj weight, shape [d_model, d_model]
+ * @param proj_bias c_proj bias, shape [d_model]
+ * @param k_cache this layer's key cache, shape [context_length, d_model], written to
+ * @param v_cache this layer's value cache, shape [context_length, d_model], written to
+ * @param len number of tokens already in the cache before this call
+ * @param n_head number of attention heads
+ * @return attention output for the new tokens, shape [T, d_model]
+ */
+Tensor attention(
+    const Tensor &input,
+    const Tensor &attn_weight,
+    const Tensor &attn_bias,
+    const Tensor &proj_weight,
+    const Tensor &proj_bias,
+    Tensor &k_cache,
+    Tensor &v_cache,
+    int len,
+    const int n_head)
 {
 
     // calculate qkv
@@ -204,7 +240,7 @@ Tensor attention(const Tensor &input, const Tensor &attn_weight, const Tensor &a
     const int T = qkv.dim(0);         // rows of out tensor
     const int d_model = input.dim(1); // cols of out tensor
 
-    Tensor Q({T, d_model}), K({T, d_model}), V({T, d_model});
+    Tensor Q({T, d_model});
 
     // split Q, K and V from qkv
     for (int i = 0; i < T; i++)
@@ -213,10 +249,12 @@ Tensor attention(const Tensor &input, const Tensor &attn_weight, const Tensor &a
         {
             const int dst = i * d_model + j;
             const int src = i * 3 * d_model + j;
+            // new token i goes right after the cached ones: row len + i
+            const int cache_dst = (len + i) * d_model + j;
 
             Q[dst] = qkv[src];
-            K[dst] = qkv[src + d_model];
-            V[dst] = qkv[src + (2 * d_model)];
+            k_cache[cache_dst] = qkv[src + d_model];
+            v_cache[cache_dst] = qkv[src + 2 * d_model];
         }
     }
 
@@ -230,7 +268,10 @@ Tensor attention(const Tensor &input, const Tensor &attn_weight, const Tensor &a
     // Q, K, V for each head
     for (int head = 0; head < n_head; head++)
     {
-        Tensor Q_h({T, head_dim}), K_h({T, head_dim}), V_h({T, head_dim});
+        // Q: only the T new tokens ask
+        // K, V: all len + T tokens (old + new) are looked at
+        Tensor Q_h({T, head_dim}), K_h({len + T, head_dim}), V_h({len + T, head_dim});
+
         for (int t = 0; t < T; t++)
         {
             for (int i = 0; i < head_dim; i++)
@@ -238,8 +279,19 @@ Tensor attention(const Tensor &input, const Tensor &attn_weight, const Tensor &a
                 int dst = t * head_dim + i;
                 int src = (t * d_model) + (head * head_dim) + i;
                 Q_h[dst] = Q[src];
-                K_h[dst] = K[src];
-                V_h[dst] = V[src];
+            }
+        }
+
+        // copy this head's columns of K and V for all len + T tokens from the cache
+        for (int i = 0; i < len + T; i++)
+        {
+            for (int j = 0; j < head_dim; j++)
+            {
+                int cache_src = (i * d_model) + (head * head_dim) + j;
+                int dst = i * head_dim + j;
+
+                K_h[dst] = k_cache[cache_src];
+                V_h[dst] = v_cache[cache_src];
             }
         }
 
@@ -256,8 +308,10 @@ Tensor attention(const Tensor &input, const Tensor &attn_weight, const Tensor &a
                 const int dst = i * scores.dim(1) + j;
                 scores[dst] /= sqrt_d_k;
 
-                // mask
-                if (j > i)
+                // causal mask: row i of Q is token len + i in the whole sequence,
+                // so it cannot see columns j > len + i
+                // in decode (T = 1) nothing is masked: the last token sees everything
+                if (j > i + len)
                 {
                     scores[dst] = neg_inf;
                 }
