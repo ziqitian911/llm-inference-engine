@@ -1,4 +1,5 @@
 #include "cuda_tensor.h"
+#include "cuda_check.h"
 
 CudaTensor::CudaTensor(const std::vector<int> &shape)
     : data_(nullptr, &cudaFree), shape_(shape) // start empty, but already knows its deleter
@@ -15,21 +16,21 @@ CudaTensor::CudaTensor(const std::vector<int> &shape)
     so catch it first, then hand ownership to unique_ptr
     */
     float *d_data = nullptr;
-    cudaMalloc(&d_data, count_ * sizeof(float));
+    CUDA_CHECK(cudaMalloc(&d_data, count_ * sizeof(float)));
     data_.reset(d_data);
 }
 
 CudaTensor::CudaTensor(const Tensor &tensor)
     : CudaTensor(tensor.shape())
 {
-    cudaMemcpy(data_.get(), tensor.begin(), count_ * sizeof(float), cudaMemcpyHostToDevice);
+    CUDA_CHECK(cudaMemcpy(data_.get(), tensor.begin(), count_ * sizeof(float), cudaMemcpyHostToDevice));
 }
 
 Tensor CudaTensor::to_host() const
 {
     Tensor out(shape_);
 
-    cudaMemcpy(out.begin(), data_.get(), count_ * sizeof(float), cudaMemcpyDeviceToHost);
+    CUDA_CHECK(cudaMemcpy(out.begin(), data_.get(), count_ * sizeof(float), cudaMemcpyDeviceToHost));
 
     return out;
 }
