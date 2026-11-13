@@ -1,40 +1,47 @@
+#include <chrono>
 #include <iostream>
-#include "tensor.h"
-#include "gemm.h"
-#include "ops.h"
+#include <vector>
+
+#include "gpt2.h"
 #include "loader.h"
-#include "threadpool.h"
 
-int main(int argc, char const *argv[])
+// print ids on one line, ready to paste into the Python decoder
+static void print_ids(const std::vector<int> &ids)
 {
+    for (int id : ids)
+    {
+        std::cout << id << " ";
+    }
+    std::cout << std::endl;
+}
 
-    Tensor fc1_w = load_tensor("model/fc1_weight.bin", {784, 128});
-    Tensor fc1_b = load_tensor("model/fc1_bias.bin", {1, 128});
-    Tensor fc2_w = load_tensor("model/fc2_weight.bin", {128, 10});
-    Tensor fc2_b = load_tensor("model/fc2_bias.bin", {1, 10});
+int main()
+{
+    auto m = load_model("model/gpt2.bin");
+    const std::vector<int> prompt = {15496, 11, 995, 0}; // "Hello, world!"
 
-    Tensor img = load_tensor("model/test_image.bin", {1, 784});
+    // greedy decoding: must match PyTorch exactly
+    const std::vector<int> expected = {15496, 11, 995, 0, 198, 198, 40, 1101, 7926, 11, 475, 314,
+                                       1101, 407, 1654, 644, 284, 466, 13, 198, 198, 40, 1101, 7926};
 
-    Tensor h = linear(img, fc1_w, fc1_b);
-    h = relu(h);
-    Tensor out = linear(h, fc2_w, fc2_b);
-    Tensor probs = softmax(out);
+    auto start = std::chrono::steady_clock::now();
+    std::vector<int> greedy = generate(prompt, m, 20);
+    auto end = std::chrono::steady_clock::now();
+    const double seconds = std::chrono::duration<double>(end - start).count();
 
-    out.print();
+    std::cout << "greedy:  ";
+    print_ids(greedy);
+    std::cout << "matches PyTorch: " << (greedy == expected ? "yes" : "NO") << std::endl;
+    std::cout << "time: " << seconds << " s, " << 20 / seconds << " tokens/s" << std::endl;
 
-    float *it = std::max_element(probs.begin(), probs.end());
-    int pred = it - probs.begin();
+    // sampling with top_k = 1 leaves one candidate, so it must equal greedy
+    std::vector<int> top1 = generate(prompt, m, 20, 0.8f, 1, 1.0f);
+    std::cout << "top_k=1 equals greedy: " << (top1 == greedy ? "yes" : "NO") << std::endl;
 
-    std::cout << pred << std::endl;
-
-    // ThreadPool pool(4);
-
-    // for (int i = 0; i < 8; i++)
-    // {
-    //     pool.enqueue(
-    //         [i]()
-    //         { std::cout << "task " << i << " running\n"; });
-    // }
+    // real sampling (seed is fixed, so the output is the same every run)
+    std::vector<int> sampled = generate(prompt, m, 40, 0.8f, 50, 0.9f);
+    std::cout << "sampled: ";
+    print_ids(sampled);
 
     return 0;
 }

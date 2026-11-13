@@ -2,6 +2,16 @@
 #include <utility>
 #include <algorithm>
 #include <iostream>
+#include <stdexcept>
+
+/**
+ * @brief default constructor
+ */
+Tensor::Tensor()
+{
+    this->count = 0;
+    this->data = nullptr;
+}
 
 /**
  * @brief Build a tensor of the given shape and allocate its buffer
@@ -65,6 +75,7 @@ Tensor::Tensor(Tensor &&other) noexcept
     this->strides = std::move(other.strides);
     this->count = other.count; // move is useless for int
     other.data = nullptr;
+    other.count = 0;
 }
 
 /**
@@ -83,6 +94,31 @@ Tensor::Tensor(const std::vector<int> &shape, const std::vector<float> &values) 
 Tensor::~Tensor()
 {
     delete[] this->data;
+}
+
+/**
+ * @brief Add another tensor to this one, element by element.
+ *
+ * @param other tensor to add, must have the same shape
+ * @return reference to this tensor
+ * @throws std::invalid_argument if the shapes differ
+ */
+Tensor &Tensor::operator+=(const Tensor &other)
+{
+
+    // check the shape
+    if (this->shape != other.shape)
+    {
+        throw std::invalid_argument("operator+=: shapes must match");
+    }
+
+    // add elements one by one
+    for (int i = 0; i < this->size(); i++)
+    {
+        this->data[i] += other.data[i];
+    }
+
+    return *this;
 }
 
 /**
@@ -142,27 +178,8 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept
     this->strides = std::move(other.strides);
     this->data = other.data;
     other.data = nullptr;
+    other.count = 0;
     return *this;
-}
-
-/**
- * @brief Access the i-th element by flat index (row-major).
- * @param i flat index, 0 .. size()-1.
- * @return reference to the element, so it can be read or written.
- */
-float &Tensor::operator[](int i)
-{
-    return this->data[i];
-}
-
-/**
- * @brief Read the i-th element by flat index (row-major).
- * @param i flat index, 0 .. size()-1.
- * @return a copy of the element (read only).
- */
-float Tensor::operator[](int i) const
-{
-    return this->data[i];
 }
 
 /**
@@ -183,6 +200,11 @@ int Tensor::size() const
 int Tensor::dim(int i) const
 {
     return shape[i];
+}
+
+int Tensor::ndim() const
+{
+    return static_cast<int>(this->shape.size());
 }
 
 /**
@@ -261,4 +283,19 @@ void Tensor::print() const
         }
         std::cout << "\n";
     }
+}
+
+/**
+ * @brief Add two tensors element by element into a new tensor.
+ *
+ * @param a left operand, not modified
+ * @param b right operand, not modified, must have the same shape as a
+ * @return the sum as a new tensor
+ * @throws std::invalid_argument if the shapes differ
+ */
+Tensor operator+(const Tensor &a, const Tensor &b)
+{
+    Tensor out = a;
+    out += b;
+    return out;
 }
