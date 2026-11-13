@@ -21,6 +21,15 @@ public:
     Tensor &operator=(const Tensor &other);
     Tensor &operator=(Tensor &&other) noexcept;
 
+    float &at(const std::vector<int> &idx);
+    float at(const std::vector<int> &idx) const;
+    float *begin();
+    float *end();
+    const float *begin() const;
+    const float *end() const;
+
+    void print() const;
+
     /**
      * @brief Access the i-th element by flat index (row-major).
      * @param i flat index, 0 .. size()-1.
@@ -41,9 +50,30 @@ public:
         return this->data_[i];
     }
 
-    int size() const;
-    int dim(int i) const;
-    int ndim() const;
+    /**
+     * @brief Number of elements in the tensor
+     *
+     * @return product of all dimensions
+     */
+    int size() const
+    {
+        return this->count_;
+    }
+
+    /**
+     * @brief Length of one dimension.
+     * @param i which dimension (0-based).
+     * @return shape[i], the size of dimension i.
+     */
+    int dim(int i) const
+    {
+        return shape_[i];
+    }
+
+    int ndim() const
+    {
+        return static_cast<int>(this->shape_.size());
+    }
 
     /**
      * @brief Shape of the tensor, e.g. {50257, 768}.
@@ -53,15 +83,6 @@ public:
     {
         return this->shape_;
     }
-
-    float &at(const std::vector<int> &idx);
-    float at(const std::vector<int> &idx) const;
-    float *begin();
-    float *end();
-    const float *begin() const;
-    const float *end() const;
-
-    void print() const;
 };
 
 Tensor operator+(const Tensor &a, const Tensor &b);

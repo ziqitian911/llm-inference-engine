@@ -183,31 +183,6 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept
 }
 
 /**
- * @brief Number of elements in the tensor
- *
- * @return product of all dimensions
- */
-int Tensor::size() const
-{
-    return this->count_;
-}
-
-/**
- * @brief Length of one dimension.
- * @param i which dimension (0-based).
- * @return shape[i], the size of dimension i.
- */
-int Tensor::dim(int i) const
-{
-    return shape_[i];
-}
-
-int Tensor::ndim() const
-{
-    return static_cast<int>(this->shape_.size());
-}
-
-/**
  * @brief Access element by multi-dim index;
  *
  * @param idx
