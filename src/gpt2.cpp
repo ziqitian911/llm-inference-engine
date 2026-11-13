@@ -114,12 +114,23 @@ Tensor lm_head(const Tensor &input, const Tensor &wte)
 
     for (int i = 0; i < vocab_size; i++)
     {
-        float sum = 0.0f;
-        for (int j = 0; j < d_model; j++)
+        // assumes d_model % 8 == 0
+        float sum0 = 0.0f, sum1 = 0.0f, sum2 = 0.0f, sum3 = 0.0f;
+        float sum4 = 0.0f, sum5 = 0.0f, sum6 = 0.0f, sum7 = 0.0f;
+        const float *w = wte.begin() + i * d_model; // start of row i of wte
+
+        for (int j = 0; j < d_model; j += 8)
         {
-            sum += last[j] * wte[i * d_model + j];
+            sum0 += last[j] * w[j];
+            sum1 += last[j + 1] * w[j + 1];
+            sum2 += last[j + 2] * w[j + 2];
+            sum3 += last[j + 3] * w[j + 3];
+            sum4 += last[j + 4] * w[j + 4];
+            sum5 += last[j + 5] * w[j + 5];
+            sum6 += last[j + 6] * w[j + 6];
+            sum7 += last[j + 7] * w[j + 7];
         }
-        out[i] = sum;
+        out[i] = ((sum0 + sum1) + (sum2 + sum3)) + ((sum4 + sum5) + (sum6 + sum7));
     }
 
     return out;
@@ -129,7 +140,7 @@ Tensor lm_head(const Tensor &input, const Tensor &wte)
  * @brief Generate new tokens one at a time, appending each to the sequence.
  *
  * Step 0 (prefill) runs the whole prompt and fills the KV cache.
- * Every layer step (decode) runs only the token generated in the previous
+ * Every later step (decode) runs only the token generated in the previous
  * step; earlier tokens are seen through their cached K and V.
  *
  * @param ids prompt token ids
@@ -176,7 +187,8 @@ std::vector<int> generate(
             input = {out.back()}; // decode: only the token generated last step
         }
 
-        Tensor logits = lm_head(forward(input, weight_map, cache), wte);
+        Tensor before_logits = forward(input, weight_map, cache);
+        Tensor logits = lm_head(before_logits, wte);
 
         int next;
         if (temperature == 0.0f)
