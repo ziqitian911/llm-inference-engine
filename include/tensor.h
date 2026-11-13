@@ -4,10 +4,10 @@
 class Tensor
 {
 private:
-    int count; // element count
-    float *data;
-    std::vector<int> shape;
-    std::vector<int> strides;
+    int count_; // element count
+    float *data_;
+    std::vector<int> shape_;
+    std::vector<int> strides_;
 
 public:
     Tensor();
@@ -28,7 +28,7 @@ public:
      */
     float &operator[](int i)
     {
-        return this->data[i];
+        return this->data_[i];
     }
 
     /**
@@ -38,12 +38,21 @@ public:
      */
     float operator[](int i) const
     {
-        return this->data[i];
+        return this->data_[i];
     }
 
     int size() const;
     int dim(int i) const;
     int ndim() const;
+
+    /**
+     * @brief Shape of the tensor, e.g. {50257, 768}.
+     * @return read-only reference to the shape (no copy).
+     */
+    const std::vector<int> &shape() const
+    {
+        return this->shape_;
+    }
 
     float &at(const std::vector<int> &idx);
     float at(const std::vector<int> &idx) const;

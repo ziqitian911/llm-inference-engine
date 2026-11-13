@@ -9,8 +9,8 @@
  */
 Tensor::Tensor()
 {
-    this->count = 0;
-    this->data = nullptr;
+    this->count_ = 0;
+    this->data_ = nullptr;
 }
 
 /**
@@ -19,22 +19,22 @@ Tensor::Tensor()
  */
 Tensor::Tensor(const std::vector<int> &shape)
 {
-    this->shape = shape;
-    this->count = 1;
+    this->shape_ = shape;
+    this->count_ = 1;
 
     for (int num : shape)
     {
-        this->count *= num;
+        this->count_ *= num;
     }
 
-    this->strides.assign(shape.size(), 1);
+    this->strides_.assign(shape.size(), 1);
 
     for (int i = (int)shape.size() - 2; i >= 0; i--)
     {
-        this->strides[i] = this->strides[i + 1] * shape[i + 1];
+        this->strides_[i] = this->strides_[i + 1] * shape[i + 1];
     }
 
-    this->data = new float[count];
+    this->data_ = new float[count_];
 }
 
 /**
@@ -46,18 +46,18 @@ Tensor::Tensor(const std::vector<int> &shape)
  */
 Tensor::Tensor(const Tensor &other)
 {
-    this->count = other.count;
-    this->shape = other.shape;
-    this->strides = other.strides;
+    this->count_ = other.count_;
+    this->shape_ = other.shape_;
+    this->strides_ = other.strides_;
 
-    this->data = new float[this->count];
+    this->data_ = new float[this->count_];
 
     // for (int i = 0; i < count; i++)
     // {
-    //     this->data[i] = other.data[i];
+    //     this->data_[i] = other.data_[i];
     // }
 
-    std::copy(other.data, other.data + count, this->data);
+    std::copy(other.data_, other.data_ + count_, this->data_);
 }
 
 /**
@@ -70,12 +70,12 @@ Tensor::Tensor(const Tensor &other)
  */
 Tensor::Tensor(Tensor &&other) noexcept
 {
-    this->data = other.data;
-    this->shape = std::move(other.shape);
-    this->strides = std::move(other.strides);
-    this->count = other.count; // move is useless for int
-    other.data = nullptr;
-    other.count = 0;
+    this->data_ = other.data_;
+    this->shape_ = std::move(other.shape_);
+    this->strides_ = std::move(other.strides_);
+    this->count_ = other.count_; // move is useless for int
+    other.data_ = nullptr;
+    other.count_ = 0;
 }
 
 /**
@@ -85,7 +85,7 @@ Tensor::Tensor(Tensor &&other) noexcept
  */
 Tensor::Tensor(const std::vector<int> &shape, const std::vector<float> &values) : Tensor(shape)
 {
-    std::copy(values.begin(), values.end(), this->data);
+    std::copy(values.begin(), values.end(), this->data_);
 }
 
 /**
@@ -93,7 +93,7 @@ Tensor::Tensor(const std::vector<int> &shape, const std::vector<float> &values) 
  */
 Tensor::~Tensor()
 {
-    delete[] this->data;
+    delete[] this->data_;
 }
 
 /**
@@ -107,7 +107,7 @@ Tensor &Tensor::operator+=(const Tensor &other)
 {
 
     // check the shape
-    if (this->shape != other.shape)
+    if (this->shape_ != other.shape_)
     {
         throw std::invalid_argument("operator+=: shapes must match");
     }
@@ -115,7 +115,7 @@ Tensor &Tensor::operator+=(const Tensor &other)
     // add elements one by one
     for (int i = 0; i < this->size(); i++)
     {
-        this->data[i] += other.data[i];
+        this->data_[i] += other.data_[i];
     }
 
     return *this;
@@ -139,15 +139,15 @@ Tensor &Tensor::operator=(const Tensor &other)
         return *this;
     }
 
-    delete[] this->data;
-    this->count = other.count;
-    this->shape = other.shape;
-    this->strides = other.strides;
-    this->data = new float[this->count];
+    delete[] this->data_;
+    this->count_ = other.count_;
+    this->shape_ = other.shape_;
+    this->strides_ = other.strides_;
+    this->data_ = new float[this->count_];
 
-    for (int i = 0; i < count; i++)
+    for (int i = 0; i < count_; i++)
     {
-        this->data[i] = other.data[i];
+        this->data_[i] = other.data_[i];
     }
 
     return *this;
@@ -172,13 +172,13 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept
         return *this;
     }
 
-    delete[] this->data;
-    this->count = other.count;
-    this->shape = std::move(other.shape);
-    this->strides = std::move(other.strides);
-    this->data = other.data;
-    other.data = nullptr;
-    other.count = 0;
+    delete[] this->data_;
+    this->count_ = other.count_;
+    this->shape_ = std::move(other.shape_);
+    this->strides_ = std::move(other.strides_);
+    this->data_ = other.data_;
+    other.data_ = nullptr;
+    other.count_ = 0;
     return *this;
 }
 
@@ -189,7 +189,7 @@ Tensor &Tensor::operator=(Tensor &&other) noexcept
  */
 int Tensor::size() const
 {
-    return this->count;
+    return this->count_;
 }
 
 /**
@@ -199,12 +199,12 @@ int Tensor::size() const
  */
 int Tensor::dim(int i) const
 {
-    return shape[i];
+    return shape_[i];
 }
 
 int Tensor::ndim() const
 {
-    return static_cast<int>(this->shape.size());
+    return static_cast<int>(this->shape_.size());
 }
 
 /**
@@ -219,10 +219,10 @@ float Tensor::at(const std::vector<int> &idx) const
 
     for (size_t i = 0; i < idx.size(); i++)
     {
-        flat += idx[i] * this->strides[i];
+        flat += idx[i] * this->strides_[i];
     }
 
-    return this->data[flat];
+    return this->data_[flat];
 }
 
 // begin()/end() expose the buffer as an iterator range, so STL algorithms
@@ -231,25 +231,25 @@ float Tensor::at(const std::vector<int> &idx) const
 /** @brief Iterator to the first element (read/write). */
 float *Tensor::begin()
 {
-    return data;
+    return data_;
 }
 
 /** @brief Iterator one past the last element (read/write). */
 float *Tensor::end()
 {
-    return data + count;
+    return data_ + count_;
 }
 
 /** @brief Iterator to the first element (read only, for const Tensors). */
 const float *Tensor::begin() const
 {
-    return data;
+    return data_;
 }
 
 /** @brief Iterator one past the last element (read only, for const Tensors). */
 const float *Tensor::end() const
 {
-    return data + count;
+    return data_ + count_;
 }
 
 /**
@@ -264,10 +264,10 @@ float &Tensor::at(const std::vector<int> &idx)
 
     for (size_t i = 0; i < idx.size(); i++)
     {
-        flat += idx[i] * this->strides[i];
+        flat += idx[i] * this->strides_[i];
     }
 
-    return this->data[flat];
+    return this->data_[flat];
 }
 
 /**
