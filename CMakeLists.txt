@@ -61,21 +61,27 @@ if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     find_package(CUDAToolkit REQUIRED)
 
     foreach(target main bench)
-        target_sources(${target} PRIVATE src/cuda/gemm.cu src/cuda/cuda_tensor.cu)
+        target_sources(${target} PRIVATE src/cuda/gemm.cu src/cuda/cuda_tensor.cu src/cuda/cuda_ops.cu)
         set_target_properties(${target} PROPERTIES CUDA_ARCHITECTURES 120)
         target_link_libraries(${target} PRIVATE CUDA::cublas)
         target_compile_definitions(${target} PRIVATE USE_CUDA)
     endforeach()
 
+    
     # CUDA unit tests (only built when CUDA is available)
-    add_executable(test_cuda_tensor
+    add_executable(cuda_tests
         tests/test_cuda_tensor.cpp
+        tests/test_cuda_ops.cpp
         src/tensor.cpp
-        src/cuda/cuda_tensor.cu)
-    target_include_directories(test_cuda_tensor PRIVATE include)
-    set_target_properties(test_cuda_tensor PROPERTIES CUDA_ARCHITECTURES 120)
-    target_link_libraries(test_cuda_tensor PRIVATE GTest::gtest_main CUDA::cudart)
-    gtest_discover_tests(test_cuda_tensor)
+        src/ops.cpp
+        src/gemm.cpp
+        src/threadpool.cpp
+        src/cuda/cuda_tensor.cu
+        src/cuda/cuda_ops.cu)
+    target_include_directories(cuda_tests PRIVATE include)
+    set_target_properties(cuda_tests PROPERTIES CUDA_ARCHITECTURES 120)
+    target_link_libraries(cuda_tests PRIVATE GTest::gtest_main CUDA::cudart)
+    gtest_discover_tests(cuda_tests)
 
 
     message(STATUS "CUDA found: building GPU backend")

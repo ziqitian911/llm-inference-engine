@@ -34,5 +34,32 @@ public:
      */
     explicit CudaTensor(const Tensor &tensor);
 
+    /**
+     * @brief Raw GPU address of the data, for passing to kernels / cudaMemcpy.
+     * @return writable device pointer. Never dereference it on the CPU.
+     */
+    float *data()
+    {
+        return data_.get();
+    }
+
+    /**
+     * @brief Read-only GPU address of the data (for const tensors).
+     * @return read-only device pointer. Never dereference it on the CPU.
+     */
+    const float *data() const
+    {
+        return data_.get();
+    }
+
+    /**
+     * @brief Number of elements in the tensor.
+     * @return product of all dimensions.
+     */
+    int size() const
+    {
+        return count_;
+    }
+
     Tensor to_host() const;
 };
