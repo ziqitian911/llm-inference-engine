@@ -166,7 +166,11 @@ Tensor transpose(const Tensor &input)
     return out;
 }
 
-Tensor layernorm(const Tensor &input, const Tensor &weight, const Tensor &bias, const float epsilon)
+Tensor layernorm(
+    const Tensor &input,
+    const Tensor &weight,
+    const Tensor &bias,
+    const float epsilon)
 {
     const int T = input.dim(0);
     const int d_model = weight.dim(0);
