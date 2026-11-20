@@ -1,11 +1,9 @@
 #include "gemm_cuda.h"
+#include "cublas_handle.h"
 
 #include <cublas_v2.h>
-#include <memory>
 
 constexpr int TILE = 16;
-
-static cublasHandle_t get_cublas_handle();
 
 __global__ void mtx_mul(float *a, float *b, float *c, const int M, const int N, const int K)
 {
@@ -189,18 +187,4 @@ float cublas_matmul(const float *a, const float *b, float *c, const int M, const
     cudaFree(d_c);
 
     return ms;
-}
-
-cublasHandle_t get_cublas_handle()
-{
-    static std::unique_ptr<cublasContext, decltype(&cublasDestroy)> p(
-        []()
-        {
-            cublasHandle_t handle;
-            cublasCreate(&handle);
-            return handle;
-        }(),
-        &cublasDestroy);
-
-    return p.get();
 }

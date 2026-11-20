@@ -61,7 +61,11 @@ if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
     find_package(CUDAToolkit REQUIRED)
 
     foreach(target main bench)
-        target_sources(${target} PRIVATE src/cuda/gemm.cu src/cuda/cuda_tensor.cu src/cuda/cuda_ops.cu)
+        target_sources(${target} PRIVATE 
+            src/cuda/gemm.cu 
+            src/cuda/cuda_tensor.cu 
+            src/cuda/cuda_ops.cu
+            src/cuda/cublas_handle.cu)
         set_target_properties(${target} PROPERTIES CUDA_ARCHITECTURES 120)
         target_link_libraries(${target} PRIVATE CUDA::cublas)
         target_compile_definitions(${target} PRIVATE USE_CUDA)
@@ -77,10 +81,11 @@ if(ENABLE_CUDA AND CMAKE_CUDA_COMPILER)
         src/gemm.cpp
         src/threadpool.cpp
         src/cuda/cuda_tensor.cu
-        src/cuda/cuda_ops.cu)
+        src/cuda/cuda_ops.cu
+        src/cuda/cublas_handle.cu)
     target_include_directories(cuda_tests PRIVATE include)
     set_target_properties(cuda_tests PROPERTIES CUDA_ARCHITECTURES 120)
-    target_link_libraries(cuda_tests PRIVATE GTest::gtest_main CUDA::cudart)
+    target_link_libraries(cuda_tests PRIVATE GTest::gtest_main CUDA::cudart CUDA::cublas)
     gtest_discover_tests(cuda_tests)
 
 
