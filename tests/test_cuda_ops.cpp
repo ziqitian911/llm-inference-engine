@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <stdexcept>
 #include <vector>
 
 #include "cuda_ops.h"
@@ -129,4 +130,92 @@ TEST(CudaOps, LayerNormMatchesCpu)
     {
         EXPECT_NEAR(actual[i], expected[i], 1e-4f) << "mismatch at index " << i;
     }
+}
+
+/**
+ * @brief Build a [rows, cols] CPU tensor with deterministic, non-repeating values.
+ *
+ * sin of a non-integer step never lines up with rows/cols, so a wrong stride
+ * or swapped dimension gives clearly different numbers.
+ */
+static Tensor make_tensor(const int rows, const int cols, const float scale, const float phase)
+{
+    std::vector<float> v(rows * cols);
+    for (int i = 0; i < rows * cols; i++)
+    {
+        v[i] = scale * std::sin(0.37f * i + phase);
+    }
+    return Tensor({rows, cols}, v);
+}
+
+/**
+ * @brief Run GPU linear and CPU linear on the same data and compare every element.
+ *
+ * The CPU linear already matches PyTorch (GPT-2 logits), so it is the reference.
+ * Tolerance 1e-3: each output is a dot product of K terms; cuBLAS adds them in
+ * a different order (and with FMA), so float rounding differs a little more
+ * than for layernorm. Outputs here are O(1), so 1e-3 still catches real bugs
+ * (a wrong ld, a swapped M/N or a missing bias is off by far more).
+ */
+static void check_linear(const int M, const int K, const int N)
+{
+    const Tensor cpu_x = make_tensor(M, K, 1.0f, 0.0f);
+    const Tensor cpu_w = make_tensor(K, N, 0.05f, 1.0f); // GPT-2-like small weights
+    std::vector<float> bv(N);
+    for (int j = 0; j < N; j++)
+    {
+        bv[j] = 0.5f - 0.001f * j; // different per column: catches a wrong bias index
+    }
+    const Tensor cpu_b({N}, bv);
+
+    const Tensor expected = linear(cpu_x, cpu_w, cpu_b);
+
+    const CudaTensor gpu_x(cpu_x);
+    const CudaTensor gpu_w(cpu_w);
+    const CudaTensor gpu_b(cpu_b);
+    const Tensor actual = linear(gpu_x, gpu_w, gpu_b).to_host();
+
+    ASSERT_EQ(expected.shape(), actual.shape());
+    for (int i = 0; i < M * N; i++)
+    {
+        EXPECT_NEAR(actual[i], expected[i], 1e-3f) << "mismatch at index " << i;
+    }
+}
+
+/**
+ * @brief Prefill shape of attn.c_attn: [4, 768] x [768, 2304].
+ *
+ * Non-square on purpose: with M != N != K, any mix-up of M/N/K or of the
+ * leading dimensions in the cuBLAS call breaks the result (a square test
+ * would hide it, as happened in M3).
+ */
+TEST(CudaOps, LinearMatchesCpuPrefill)
+{
+    check_linear(4, 768, 2304);
+}
+
+/**
+ * @brief Decode shape of mlp.c_proj: [1, 3072] x [3072, 768].
+ *
+ * M = 1 is the GEMV case every decode step hits; K = 3072 is the longest
+ * dot product in GPT-2.
+ */
+TEST(CudaOps, LinearMatchesCpuDecode)
+{
+    check_linear(1, 3072, 768);
+}
+
+/**
+ * @brief Wrong shapes must throw before anything is launched.
+ */
+TEST(CudaOps, LinearRejectsBadShapes)
+{
+    const CudaTensor x(make_tensor(4, 768, 1.0f, 0.0f));
+    const CudaTensor w(make_tensor(768, 2304, 1.0f, 0.0f));
+    const CudaTensor bad_w(make_tensor(3072, 768, 1.0f, 0.0f));
+    const CudaTensor b(Tensor({2304}, std::vector<float>(2304, 0.0f)));
+    const CudaTensor bad_b(Tensor({3072}, std::vector<float>(3072, 0.0f)));
+
+    EXPECT_THROW(linear(x, bad_w, b), std::invalid_argument); // K mismatch
+    EXPECT_THROW(linear(x, w, bad_b), std::invalid_argument); // bias size != N
 }

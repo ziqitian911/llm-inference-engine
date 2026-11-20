@@ -28,7 +28,24 @@ __host__ void residual(CudaTensor &a, const CudaTensor &b);
  * @return new [T, d] GPU tensor; input is left unchanged (the residual stream still needs it).
  * @throws std::invalid_argument if weight or bias size != d.
  */
-__host__ CudaTensor layernorm(const CudaTensor &input,
-                              const CudaTensor &weight,
-                              const CudaTensor &bias,
-                              const float epsilon = 1e-5f);
+__host__ CudaTensor layernorm(
+    const CudaTensor &input,
+    const CudaTensor &weight,
+    const CudaTensor &bias,
+    const float epsilon = 1e-5f);
+
+/**
+ * @brief Fully connected layer on the GPU: out = input x weights + bias.
+ *
+ * Matrix multiply goes to cuBLAS; the bias is added by a small broadcast kernel.
+ * Weights are [in, out] (GPT-2 Conv1D layout), same as the CPU linear.
+ * @param input [M, K] GPU tensor (M = tokens).
+ * @param weights [K, N] GPU tensor.
+ * @param bias [N] GPU tensor, added to every row.
+ * @return new [M, N] GPU tensor.
+ * @throws std::invalid_argument if K or the bias size does not match.
+ */
+__host__ CudaTensor linear(
+    const CudaTensor &input,
+    const CudaTensor &weights,
+    const CudaTensor &bias);

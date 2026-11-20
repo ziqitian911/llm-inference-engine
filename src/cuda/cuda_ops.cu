@@ -1,6 +1,7 @@
 #include "cuda_ops.h"
 #include "cuda_tensor.h"
 #include "cuda_check.h"
+#include "cublas_handle.h"
 
 #include <cmath>
 #include <numbers>
@@ -135,6 +136,22 @@ __global__ void layernorm_kernel(
     }
 }
 
+/**
+ * @brief One thread per element: out[i] += bias[column of i] (broadcast over rows).
+ * @param a [M, N] output, device pointer, updated in place.
+ * @param b [N] bias, device pointer; every row reuses the same N values.
+ * @param n total elements, M * N.
+ * @param N row length; i % N is the column of element i.
+ */
+__global__ void add_bias_kernel(float *a, const float *b, const int n, const int N)
+{
+    const int i = blockDim.x * blockIdx.x + threadIdx.x;
+    if (i < n)
+    {
+        a[i] += b[i % N];
+    }
+}
+
 __host__ void gelu(CudaTensor &tensor)
 {
     float *data = tensor.data();
@@ -195,5 +212,56 @@ __host__ CudaTensor layernorm(
 
     CUDA_CHECK(cudaGetLastError());
 
+    return out;
+}
+
+__host__ CudaTensor linear(
+    const CudaTensor &input,
+    const CudaTensor &weights,
+    const CudaTensor &bias)
+{
+
+    // check dim
+    if (input.dim(1) != weights.dim(0))
+    {
+        throw std::invalid_argument("linear: input cols must equal weights rows");
+    }
+
+    const int M = input.dim(0);
+    const int K = input.dim(1);
+    const int N = weights.dim(1);
+
+    if (bias.size() != N)
+    {
+        throw std::invalid_argument("linear: bias size must equal weights cols.");
+    }
+
+    CudaTensor out({M, N});
+
+    const float alpha = 1.0f, beta = 0.0f; // out = 1 * (input x weights) + 0 * out
+
+    /*
+    cuBLAS is column-major: our row-major [R, C] buffer looks like its transpose [C, R].
+    So we ask it for out^T = weights^T x input^T, which it already "sees" for free:
+    weights goes first, input second, M and N swapped.
+    Each leading dimension = row length of that matrix in our row-major view.
+    */
+    cublasSgemm(
+        get_cublas_handle(),
+        CUBLAS_OP_N,
+        CUBLAS_OP_N,
+        N, M, K,
+        &alpha,
+        weights.data(), N,
+        input.data(), K,
+        &beta,
+        out.data(), N);
+
+    // same default stream as cuBLAS, so this runs after the multiply has finished
+    const int threads = 256;
+    const int blocks = (out.size() + threads - 1) / threads;
+
+    add_bias_kernel<<<blocks, threads>>>(out.data(), bias.data(), out.size(), N);
+    CUDA_CHECK(cudaGetLastError());
     return out;
 }
