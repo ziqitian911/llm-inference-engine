@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <memory>
 #include <stdexcept>
 #include <vector>
 
+#include "cuda_check.h"
 #include "cuda_ops.h"
 #include "cuda_tensor.h"
 #include "ops.h"
@@ -218,4 +220,94 @@ TEST(CudaOps, LinearRejectsBadShapes)
 
     EXPECT_THROW(linear(x, bad_w, b), std::invalid_argument); // K mismatch
     EXPECT_THROW(linear(x, w, bad_b), std::invalid_argument); // bias size != N
+}
+
+/**
+ * @brief Copy token ids into a GPU buffer that frees itself (unique_ptr + cudaFree).
+ *
+ * In the engine this buffer is allocated once and reused; a test just needs one.
+ */
+static std::unique_ptr<int, decltype(&cudaFree)> upload_ids(const std::vector<int> &ids)
+{
+    int *raw = nullptr;
+    CUDA_CHECK(cudaMalloc(&raw, ids.size() * sizeof(int)));
+    std::unique_ptr<int, decltype(&cudaFree)> d_ids(raw, &cudaFree);
+    CUDA_CHECK(cudaMemcpy(raw, ids.data(), ids.size() * sizeof(int), cudaMemcpyHostToDevice));
+    return d_ids;
+}
+
+/**
+ * @brief Run GPU and CPU embedding on the same small tables and compare.
+ *
+ * Small tables (vocab 50, context 16) keep the test fast; d = 768 is GPT-2's width.
+ * Exact match (EXPECT_FLOAT_EQ, not a tolerance): each output is a single float add
+ * of the same two numbers on CPU and GPU, so there is no rounding difference.
+ */
+static void check_embedding(const std::vector<int> &ids, const int start_pos)
+{
+    const int vocab = 50;
+    const int context = 16;
+    const int d = 768;
+
+    std::vector<float> te(vocab * d);
+    std::vector<float> pe(context * d);
+    for (int i = 0; i < vocab * d; i++)
+    {
+        te[i] = std::sin(0.13f * i); // every row different: a wrong row index shows up
+    }
+    for (int i = 0; i < context * d; i++)
+    {
+        pe[i] = 0.1f * std::cos(0.29f * i);
+    }
+    const Tensor cpu_wte({vocab, d}, te);
+    const Tensor cpu_wpe({context, d}, pe);
+
+    const Tensor expected = embedding(ids, cpu_wte, cpu_wpe, start_pos);
+
+    const CudaTensor gpu_wte(cpu_wte);
+    const CudaTensor gpu_wpe(cpu_wpe);
+    const auto d_ids = upload_ids(ids);
+    const int T = static_cast<int>(ids.size());
+
+    const Tensor actual = embedding(d_ids.get(), T, gpu_wte, gpu_wpe, start_pos).to_host();
+
+    ASSERT_EQ(expected.shape(), actual.shape());
+    for (int i = 0; i < T * d; i++)
+    {
+        EXPECT_FLOAT_EQ(actual[i], expected[i]) << "mismatch at index " << i;
+    }
+}
+
+/**
+ * @brief Prefill: 5 tokens from position 0, ids out of order and repeated.
+ */
+TEST(CudaOps, EmbeddingMatchesCpuPrefill)
+{
+    check_embedding({7, 3, 42, 0, 7}, 0);
+}
+
+/**
+ * @brief Decode: one token at position 9.
+ *
+ * start_pos != 0 is the point: passing 0 to the kernel instead of start_pos
+ * would read wpe row 0 and fail here (prefill alone would not notice).
+ */
+TEST(CudaOps, EmbeddingMatchesCpuDecode)
+{
+    check_embedding({42}, 9);
+}
+
+/**
+ * @brief Bad tables or positions past the context must throw before launching.
+ */
+TEST(CudaOps, EmbeddingRejectsBadInputs)
+{
+    const int d = 768;
+    const CudaTensor wte(Tensor({50, d}, std::vector<float>(50 * d, 0.0f)));
+    const CudaTensor wpe(Tensor({16, d}, std::vector<float>(16 * d, 0.0f)));
+    const CudaTensor narrow_wpe(Tensor({16, 64}, std::vector<float>(16 * 64, 0.0f)));
+    const auto d_ids = upload_ids({1, 2, 3, 4});
+
+    EXPECT_THROW(embedding(d_ids.get(), 4, wte, narrow_wpe), std::invalid_argument); // widths differ
+    EXPECT_THROW(embedding(d_ids.get(), 4, wte, wpe, 13), std::invalid_argument);    // 13 + 4 > 16
 }

@@ -49,3 +49,24 @@ __host__ CudaTensor linear(
     const CudaTensor &input,
     const CudaTensor &weights,
     const CudaTensor &bias);
+
+/**
+ * @brief Token + position embedding on the GPU.
+ *
+ * Row t of the output = wte[ids[t]] + wpe[start_pos + t].
+ * The ids must already be in GPU memory: the caller owns that buffer and
+ * reuses it across calls, so no allocation happens per token.
+ * @param d_ids device pointer to T token ids (each must be < wte.dim(0)).
+ * @param T number of tokens.
+ * @param wte [vocab, d] token embedding table.
+ * @param wpe [context, d] position embedding table.
+ * @param start_pos position of ids[0] (0 for prefill, cache length for decode).
+ * @return new [T, d] GPU tensor.
+ * @throws std::invalid_argument if the tables' widths differ or the positions exceed wpe.
+ */
+__host__ CudaTensor embedding(
+    const int *d_ids,
+    const int T,
+    const CudaTensor &wte,
+    const CudaTensor &wpe,
+    const int start_pos = 0);

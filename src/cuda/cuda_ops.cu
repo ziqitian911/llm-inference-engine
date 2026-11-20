@@ -152,6 +152,36 @@ __global__ void add_bias_kernel(float *a, const float *b, const int n, const int
     }
 }
 
+/**
+ * @brief One thread per output element: out[t][j] = wte[ids[t]][j] + wpe[start_pos + t][j].
+ *
+ * The output is treated as one flat strip of T * d numbers; each thread
+ * recovers its row (which token) with / and its column with %.
+ * @param d_ids [T] token ids, device pointer.
+ * @param wte [vocab, d] token embedding table.
+ * @param wpe [context, d] position embedding table.
+ * @param out [T, d] output.
+ * @param start_pos position of the first token (0 for prefill, cache length for decode).
+ */
+__global__ void embedding_kernel(
+    const int *d_ids,
+    const float *wte,
+    const float *wpe,
+    float *out,
+    const int T,
+    const int d,
+    const int start_pos)
+{
+    const int tid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (tid < T * d)
+    {
+        const int row = tid / d;
+        const int col = tid % d;
+        out[tid] = wte[d_ids[row] * d + col] + wpe[(row + start_pos) * d + col];
+    }
+}
+
 __host__ void gelu(CudaTensor &tensor)
 {
     float *data = tensor.data();
@@ -262,6 +292,36 @@ __host__ CudaTensor linear(
     const int blocks = (out.size() + threads - 1) / threads;
 
     add_bias_kernel<<<blocks, threads>>>(out.data(), bias.data(), out.size(), N);
+    CUDA_CHECK(cudaGetLastError());
+    return out;
+}
+
+__host__ CudaTensor embedding(const int *d_ids, const int T, const CudaTensor &wte, const CudaTensor &wpe, const int start_pos)
+{
+
+    const int d = wte.dim(1);
+
+    // both tables must have the same row length, or the add is misaligned
+    if (wpe.dim(1) != d)
+    {
+        throw std::invalid_argument("embedding: wte and wpe must have the same width");
+    }
+
+    // wpe has one row per position (1024 for GPT-2); reading past it is out of bounds
+    if (start_pos < 0 || start_pos + T > wpe.dim(0))
+    {
+        throw std::invalid_argument("embedding: positions exceed the context length");
+    }
+
+    // token ids are already on the GPU, so their range can't be checked here;
+    // the caller checks them before copying them over
+
+    CudaTensor out({T, d});
+
+    const int threads = 256;
+    const int blocks = (out.size() + threads - 1) / threads;
+
+    embedding_kernel<<<blocks, threads>>>(d_ids, wte.data(), wpe.data(), out.data(), T, d, start_pos);
     CUDA_CHECK(cudaGetLastError());
     return out;
 }
