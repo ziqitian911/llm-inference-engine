@@ -40,3 +40,33 @@ TEST(CudaOps, GeluMatchesCpu)
         EXPECT_NEAR(actual[i], expected[i], 1e-5f) << "mismatch at index " << i;
     }
 }
+
+TEST(CudaOps, ResidualMatchesCpu)
+{
+    const int n = 1000;
+    std::vector<float> values_1(n);
+    std::vector<float> values_2(n);
+    for (int i = 0; i < n; i++)
+    {
+        values_1[i] = -5.0f + 10.0f * i / (n - 1);
+        values_2[i] = 5.0f - 10.0f * i / (n - 1);
+    }
+    Tensor cpu_1({1, n}, values_1);
+    const Tensor cpu_2({1, n}, values_2);
+
+    CudaTensor gpu_1(cpu_1);
+    const CudaTensor gpu_2(cpu_2);
+
+    cpu_1 += cpu_2;
+
+    residual(gpu_1, gpu_2);
+
+    Tensor actual = gpu_1.to_host();
+
+    ASSERT_EQ(cpu_1.shape(), actual.shape());
+
+    for (int i = 0; i < n; i++)
+    {
+        EXPECT_NEAR(actual[i], cpu_1[i], 1e-5f) << "mismatch at index " << i;
+    }
+}

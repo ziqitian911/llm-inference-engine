@@ -61,5 +61,29 @@ public:
         return count_;
     }
 
+    /**
+     * @brief Length of one dimension.
+     * @param i which dimension (0-based).
+     * @return shape_[i], the size of dimension i.
+     */
+    int dim(int i) const
+    {
+        return shape_[i];
+    }
+
+    /**
+     * @brief Full shape of the tensor.
+     * @return read-only reference to shape_, e.g. {T, 768}.
+     */
+    const std::vector<int> &shape() const
+    {
+        return shape_;
+    }
+
+    /**
+     * @brief Download the data back to a new CPU tensor (same shape).
+     * @return CPU Tensor holding a copy of the GPU data.
+     *         Blocks until earlier kernels on the default stream have finished.
+     */
     Tensor to_host() const;
 };

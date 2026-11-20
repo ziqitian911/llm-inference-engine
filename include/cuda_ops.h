@@ -10,3 +10,11 @@
  * @param tensor GPU tensor of any shape; its values are replaced by gelu(x).
  */
 __host__ void gelu(CudaTensor &tensor);
+
+/**
+ * @brief In-place residual add on the GPU: a[i] += b[i].
+ * @param a GPU tensor, overwritten with a + b (the residual stream).
+ * @param b GPU tensor with the same shape as a; read only.
+ * @throws std::invalid_argument if the shapes differ.
+ */
+__host__ void residual(CudaTensor &a, const CudaTensor &b);
